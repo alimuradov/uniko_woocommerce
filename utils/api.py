@@ -1,3 +1,4 @@
+import time
 from utils.woocommerce import wcapi
 from utils.utils import get_attribute_id_by_name, group_products_by_codtmc, \
     get_field_values, generate_variations
@@ -225,10 +226,10 @@ def create_products(existing_products, created_products):
                     {'key': 'scancod', 'value': created_products[product][0]['scancod']},
                 ],
             }
-        #ДОбавляем создаваемый товар в порцию    
-        batch.append(pill)
-        #ДОбавляем текущий товар в массив созданных товаров
-        created_pills.append(codtmc)
+            #ДОбавляем создаваемый товар в порцию    
+            batch.append(pill)
+            #ДОбавляем текущий товар в массив созданных товаров
+            created_pills.append(codtmc)
 
         if len(batch) == batch_size:
             # Отправляем текущую порцию на создание
@@ -241,7 +242,7 @@ def create_products(existing_products, created_products):
                     print(f"Ошибка при создании товаров - Batch {i//batch_size+1}/{total_products//batch_size+1}")
             except Exception as e:
                 print(f"Exception occurred while creating products - Batch {i//batch_size+1}/{total_products//batch_size+1}: {str(e)}")
-        
+                time.sleep(30)  # Приостановить выполнение на 60 секунд
             batch = []  # Обнуляем текущую порцию
 
     # Проверяем, остались ли товары в последней порции
@@ -277,9 +278,11 @@ def create_variations(existing_products, created_products):
         if len(response) == 0:
             create_variations = generate_variations(created_products[int(product['sku'])], existing_attributes)
         elif len(response) > 0: #Если же вариации есть то удаляем их
+            existing_variations = response
             for item in response:
                 delete_variations.append(item['id'])
-
+            # И создаем по новой
+            create_variations = generate_variations(created_products[int(product['sku'])], existing_attributes)
         data = {
             "create": create_variations,
             "delete": delete_variations,
@@ -287,7 +290,7 @@ def create_variations(existing_products, created_products):
 
         response = wcapi.post(f"products/{str(product['id'])}/variations/batch", data)
         if response.status_code == 200:
-            response = response.json()
+            print("Cозданы характеристики товара " + product['name'])
         else:
             print("Ошибка при создании вариаций товара " + product['name'])
             break 

@@ -12,5 +12,5 @@ wcapi = API(
     consumer_secret=woocommerce_cs,
     wp_api=True,
     version="wc/v3",
-    timeout=20 # the default is 5, increase to whatever works for you.
+    timeout=60 # the default is 5, increase to whatever works for you.
 )

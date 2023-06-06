@@ -55,27 +55,24 @@ def get_field_values(objects, key):
 
 def generate_variations(objects, existing_attributes):
     variations = []  # Список для хранения значений поля
-    attributes = []
-
-    i=0
     for obj in objects:
-        i += 1
+        attributes = []
         attribute_filial = {
             "id": get_attribute_id_by_name(existing_attributes, "Филиал"),
             "option": obj['namepodr']
         }
+        attributes.append(attribute_filial)
 
         attribute_price = {
             "id": get_attribute_id_by_name(existing_attributes, "Цена"),
             "option": obj['price']
         }
+        attributes.append(attribute_price)
 
         attribute_ost = {
             "id": get_attribute_id_by_name(existing_attributes, "Остаток"),
             "option": obj['ost']
         }                
-        attributes.append(attribute_filial)
-        attributes.append(attribute_price)
         attributes.append(attribute_ost)
         
         variation = {
@@ -87,4 +84,13 @@ def generate_variations(objects, existing_attributes):
         variations.append(variation)
 
     return variations
+
+
+def update_variations(existing_variations, new_stocks):
+    updated_variations = []
+
+    for existing_variation in existing_variations:
+        # Находим соответствующую партию по атрибутам вариации
+        pass
+
 

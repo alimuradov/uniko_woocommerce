@@ -70,7 +70,7 @@ def get_stocks_from_dbf():
 
     # Получение всех уникальных значений справочника товары, фильруем по артикулу
     codtmc = set(item['codtmc'] for item in stocks)
-    codtmc_list = list(filial)  
+    codtmc_list = list(codtmc)  
     print('Товаров в выгрузке ' + str(len(codtmc_list)))
     print('Партий в выгрузке ' + str(len(stocks)))              
 
