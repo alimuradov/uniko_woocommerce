@@ -128,7 +128,7 @@ def create_attribute_terms(attribute, existing_terms, created_terms_value):
 def get_all_products():
     all_products = []
     page = 1
-    per_page = 100
+    per_page = 900
     total_pages = 1
     
     while page <= total_pages:
@@ -142,12 +142,12 @@ def get_all_products():
             total_pages = int(response.headers.get("X-WP-TotalPages"))
             
             # Увеличение номера страницы для следующего запроса
+            print("Получено " + str(page * per_page) + " товаров")
             page += 1
-            print("Все товары получены")
         else:
             print("Ошибка при получении товаров")
             break
-    
+    print("Всего получено "  + str(len(all_products)) + " товаров")
     return all_products
 
 def create_products(existing_products, created_products):
@@ -253,6 +253,8 @@ def create_products(existing_products, created_products):
             print(f"Создано {len(batch)} товаров")
         else:
             print("Ошибка при создании товаров")
+    else:
+        print("Нет новых товаров в порции")             
 
 
 
@@ -278,11 +280,14 @@ def create_variations(existing_products, created_products):
         if len(response) == 0:
             create_variations = generate_variations(created_products[int(product['sku'])], existing_attributes)
         elif len(response) > 0: #Если же вариации есть то удаляем их
-            existing_variations = response
             for item in response:
                 delete_variations.append(item['id'])
-            # И создаем по новой
-            create_variations = generate_variations(created_products[int(product['sku'])], existing_attributes)
+            try:
+                # И создаем по новой
+                create_variations = generate_variations(created_products[int(product['sku'])], existing_attributes)
+            except KeyError as e:
+                print("Ошибка при создании вариаций товара " + product['name'] + ": " + str(e))
+
         data = {
             "create": create_variations,
             "delete": delete_variations,
