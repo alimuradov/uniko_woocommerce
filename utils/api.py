@@ -278,7 +278,10 @@ def create_variations(existing_products, created_products):
             break 
         #Если характеристик нет то создаем их
         if len(response) == 0:
-            create_variations = generate_variations(created_products[int(product['sku'])], existing_attributes)
+            try:
+                create_variations = generate_variations(created_products[int(product['sku'])], existing_attributes)
+            except KeyError as e:
+                print("Ошибка при создании вариаций товара " + product['name'] + ": " + str(e))
         elif len(response) > 0: #Если же вариации есть то удаляем их
             for item in response:
                 delete_variations.append(item['id'])
