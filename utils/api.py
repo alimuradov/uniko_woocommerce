@@ -295,10 +295,12 @@ def create_variations(existing_products, created_products):
             "create": create_variations,
             "delete": delete_variations,
         }        
-
-        response = wcapi.post(f"products/{str(product['id'])}/variations/batch", data)
-        if response.status_code == 200:
-            print("Cозданы характеристики товара " + product['name'])
-        else:
-            print("Ошибка при создании вариаций товара " + product['name'])
-            break 
+        try:
+            response = wcapi.post(f"products/{str(product['id'])}/variations/batch", data)
+            if response.status_code == 200:
+                print("Cозданы характеристики товара " + product['name'])
+            else:
+                print("Не удалось создать вариацию товара " + product['name'])
+        except Exception as e:
+            print(f"Ошибка при создании вариаций товара: {str(e)}")
+                
