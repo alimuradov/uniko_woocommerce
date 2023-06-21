@@ -1,7 +1,8 @@
 import time
 from utils.woocommerce import wcapi
 from utils.utils import get_attribute_id_by_name, group_products_by_codtmc, \
-    get_field_values, generate_variations
+    get_field_values, generate_variations, get_stocks_meta, calculate_total_ost, find_min_price, \
+    strtobool
 from .func import generate_slug
 
 def create_new_categories(existing_categories, all_categories):
@@ -255,6 +256,274 @@ def create_products(existing_products, created_products):
             print("Ошибка при создании товаров")
     else:
         print("Нет новых товаров в порции")             
+
+
+def create_and_update_products(existing_products, created_products):
+    # Группируем массив по коду
+    created_products = group_products_by_codtmc(created_products)
+
+    batch_size = 100
+    total_products = len(created_products)
+    created_pills = []
+
+    # Снова получаем все категории, они нам понадобятся при создании/обновлении товаров
+    existing_categories = wcapi.get("products/categories", params={"per_page": 100}).json()
+
+    # Получаем все атрибуты товаров на сайте
+    existing_attributes = wcapi.get("products/attributes", params={"per_page": 100}).json()
+
+    batch_create = []  # Массив для хранения товаров, которые нужно создать
+    batch_update = []  # Массив для хранения товаров, которые нужно обновить
+    i = 0
+    for product in created_products:
+        i += 1
+        codtmc = str(product)
+        current_product = created_products[product]
+
+        if (codtmc not in created_pills) and  (codtmc not in [existing_product.get("sku", "") for existing_product in existing_products]):
+            # Создаем новый товар
+            category_id = None
+
+            for category in existing_categories:
+                if category.get("name") == current_product[0]['group']:
+                    category_id = category.get("id")
+                    break
+
+            name = current_product[0]['name']
+            ostatok = calculate_total_ost(current_product)
+            pill = {
+                "name": name,
+                "slug": generate_slug(name),
+                "sku": codtmc,
+                "type": "simple",
+                "categories": [{"id": category_id}] if category_id else [],
+                "regular_price": find_min_price(current_product),
+                "manage_stock": False,
+                "stock_quantity": ostatok,
+                "stock_status": "instock" if ostatok > 0 else "outofstock",
+                "attributes": [
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Фармгруппа"),
+                        "name": "Фармгруппа",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'farmgroup')
+                    },
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Группа"),
+                        "name": "Группа",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'group')
+                    },
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Производитель"),
+                        "name": "Производитель",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'factory')
+                    }, 
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "МНН"),
+                        "name": "МНН",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'mnn')
+                    }, 
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Бренд"),
+                        "name": "Бренд",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'brand')
+                    }, 
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Срок годности"),
+                        "name": "Срок годности",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'datevalid')
+                    }, 
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Рецептурный"),
+                        "name": "Рецептурный",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": [current_product[0]['isrecept']]
+                    }, 
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Количество в упаковке"),
+                        "name": "Количество в упаковке",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'delupak')
+                    }, 
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "ЖНВЛ"),
+                        "name": "ЖНВЛ",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": [current_product[0]['islife']]
+                    }, 
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Штрихкод"),
+                        "name": "Штрихкод",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'scancod')
+                    },                                                                                                                                                                                                           
+                ],
+                "meta_data": get_stocks_meta(current_product),
+            }
+            batch_create.append(pill)
+            created_pills.append(codtmc)
+        else:
+            # Обновляем существующий товар 
+            category_id = None
+
+            for category in existing_categories:
+                if category.get("name") == current_product[0]['group']:
+                    category_id = category.get("id")
+                    break
+
+            existing_product = None
+            for existing_product in existing_products:
+                if existing_product.get("sku", "") == codtmc:
+                    break                
+
+            name = current_product[0]['name']
+            ostatok = calculate_total_ost(current_product) 
+                          
+            pill = {
+                "id": existing_product['id'],
+                "name": name,
+                "regular_price": find_min_price(created_products[product]),
+                "categories": [{"id": category_id}] if category_id else [],
+                "stock_quantity": calculate_total_ost(created_products[product]),
+                "manage_stock": False,
+                "stock_quantity": ostatok,
+                "stock_status": "instock" if ostatok > 0 else "outofstock",
+                "attributes": [
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Фармгруппа"),
+                        "name": "Фармгруппа",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'farmgroup')
+                    },
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Группа"),
+                        "name": "Группа",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'group')
+                    },
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Производитель"),
+                        "name": "Производитель",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'factory')
+                    }, 
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "МНН"),
+                        "name": "МНН",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'mnn')
+                    }, 
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Бренд"),
+                        "name": "Бренд",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'brand')
+                    }, 
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Срок годности"),
+                        "name": "Срок годности",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'datevalid')
+                    }, 
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Рецептурный"),
+                        "name": "Рецептурный",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": [current_product[0]['isrecept']]
+                    }, 
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Количество в упаковке"),
+                        "name": "Количество в упаковке",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'delupak')
+                    }, 
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "ЖНВЛ"),
+                        "name": "ЖНВЛ",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": [current_product[0]['islife']]
+                    }, 
+                    {
+                        "id": get_attribute_id_by_name(existing_attributes, "Штрихкод"),
+                        "name": "Штрихкод",
+                        "position": 0,
+                        "visible": True,
+                        "variation": False,
+                        "options": get_field_values(current_product, 'scancod')
+                    },                                                                                                                                                                                                           
+                ],
+                "meta_data": get_stocks_meta(current_product),                
+            }
+            batch_update.append(pill)
+
+        if len(batch_create) + len(batch_update) == batch_size:
+            # Отправляем текущую порцию на создание и обновление
+            data = {"create": batch_create, "update": batch_update}
+            try:
+                response = wcapi.post("products/batch", data)
+                if response.status_code == 200:
+                    print(f"Создано {len(batch_create)} товаров и обновлено {len(batch_update)} товаров - Batch {i // batch_size + 1}/{total_products // batch_size + 1}")
+                else:
+                    print(f"Ошибка при создании/обновлении товаров - Batch {i // batch_size + 1}/{total_products // batch_size + 1}")
+            except Exception as e:
+                print(f"Exception occurred while creating/updating products - Batch {i // batch_size + 1}/{total_products // batch_size + 1}: {str(e)}")
+                time.sleep(30)  # Приостановить выполнение на 30 секунд
+            batch_create = []  # Обнуляем текущую порцию для создания
+            batch_update = []  # Обнуляем текущую порцию для обновления
+
+    # Проверяем, остались ли товары в последней порции для создания и обновления
+    if batch_create or batch_update:
+        data = {"create": batch_create, "update": batch_update}
+        response = wcapi.post("products/batch", data)
+        if response.status_code == 200:
+            print(f"Создано {len(batch_create)} товаров и обновлено {len(batch_update)} товаров")
+        else:
+            print("Ошибка при создании/обновлении товаров")
+    else:
+        print("Нет новых товаров для создания и обновления")
 
 
 
