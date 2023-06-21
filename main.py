@@ -144,13 +144,13 @@ for attribute in existing_attributes:
 existing_products = api.get_all_products()
 
 #Создаем товары
-api.create_products(existing_products, result['stocks'])
+api.create_and_update_products(existing_products, result['stocks'])
 
 #Снова  получаем существующие товары
-existing_products = api.get_all_products()
+# existing_products = api.get_all_products()
 
 #Далее обходим все товары  и обновлям для них вариации.
-api.create_variations(existing_products, result['stocks'])
+# api.create_variations(existing_products, result['stocks'])
 
 # Получаем время окончания выполнения скрипта
 end_time = datetime.datetime.now()

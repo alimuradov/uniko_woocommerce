@@ -86,6 +86,26 @@ def generate_variations(objects, existing_attributes):
     return variations
 
 
+def get_stocks_meta(obj):
+    stocks_meta = []
+    for item in obj:
+        stock_name = item['namepodr']
+        stock_ost = item['ost']
+        stocks_meta.append({'key': stock_name, 'value': stock_ost})
+    return stocks_meta
+
+def calculate_total_ost(obj):
+    total_ost = sum(item['ost'] for item in obj)
+    if total_ost == 0:
+        return 0
+    return total_ost
+
+
+def find_min_price(obj):
+    min_price = min(item['price'] for item in obj)
+    return min_price
+
+
 def update_variations(existing_variations, new_stocks):
     updated_variations = []
 
@@ -94,3 +114,15 @@ def update_variations(existing_variations, new_stocks):
         pass
 
 
+def strtobool (val):
+    """Convert a string representation of truth to true (1) or false (0).
+    True values are 'y', 'yes', 't', 'true', 'on', and '1'; false values
+    are 'n', 'no', 'f', 'false', 'off', and '0'.  Raises ValueError if
+    'val' is anything else.
+    """
+    if val in ('y', 'yes', 't', 'true', 'on', '1'):
+        return 1
+    elif val in ('n', 'no', 'f', 'false', 'off', '0'):
+        return 0
+    else:
+        raise ValueError("invalid truth value %r" % (val,))
