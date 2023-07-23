@@ -53,6 +53,17 @@ def get_field_values(objects, key):
 
     return field_values
 
+def get_unique_field_values(objects, key):
+    field_values = set()  # Множество для хранения уникальных значений поля
+
+    for obj in objects:
+        value = obj.get(key)
+        if value:
+            field_values.add(value)
+
+    return list(field_values)
+
+
 def generate_variations(objects, existing_attributes):
     variations = []  # Список для хранения значений поля
     for obj in objects:

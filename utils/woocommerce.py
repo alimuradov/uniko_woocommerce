@@ -2,6 +2,9 @@ from woocommerce import API
 from dotenv import load_dotenv
 import os
 
+
+load_dotenv()
+
 api_url = os.getenv("API_URL")
 woocommerce_ck = os.getenv("WOO_KEY")
 woocommerce_cs = os.getenv("WOO_SECRET_KOD")

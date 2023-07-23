@@ -2,7 +2,7 @@ import time
 from utils.woocommerce import wcapi
 from utils.utils import get_attribute_id_by_name, group_products_by_codtmc, \
     get_field_values, generate_variations, get_stocks_meta, calculate_total_ost, find_min_price, \
-    strtobool
+    get_unique_field_values
 from .func import generate_slug
 
 def create_new_categories(existing_categories, all_categories):
@@ -356,7 +356,7 @@ def create_and_update_products(existing_products, created_products):
                         "position": 0,
                         "visible": True,
                         "variation": False,
-                        "options": [current_product[0]['isrecept']]
+                        "options": ["Да" if current_product[0]['isrecept'] else "Нет"]
                     }, 
                     {
                         "id": get_attribute_id_by_name(existing_attributes, "Количество в упаковке"),
@@ -372,7 +372,7 @@ def create_and_update_products(existing_products, created_products):
                         "position": 0,
                         "visible": True,
                         "variation": False,
-                        "options": [current_product[0]['islife']]
+                        "options": ["Да" if current_product[0]['islife'] else "Нет"]
                     }, 
                     {
                         "id": get_attribute_id_by_name(existing_attributes, "Штрихкод"),
@@ -380,7 +380,7 @@ def create_and_update_products(existing_products, created_products):
                         "position": 0,
                         "visible": True,
                         "variation": False,
-                        "options": get_field_values(current_product, 'scancod')
+                        "options": get_unique_field_values(current_product, 'scancod')
                     },                                                                                                                                                                                                           
                 ],
                 "meta_data": get_stocks_meta(current_product),
