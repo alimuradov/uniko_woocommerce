@@ -45,7 +45,7 @@ def create_new_attributes(existing_attributes):
         {'name': 'Количество в упаковке', 'slug': 'pa_delupak', "has_archives": False},
         {'name': 'Единица измерения', 'slug': 'pa_measure', "has_archives": False},
         {'name': 'ЖНВЛ', 'slug': 'pa_islife', "has_archives": False},
-        {'name': 'Штрихкод', 'slug': 'pa_scancod, "has_archives": True, "type": "select"'},
+        {'name': 'Штрихкод', 'slug': 'pa_scancod', "has_archives": True, "type": "select"},
         {'name': 'Цена', 'slug': 'pa_price', "has_archives": False},
         {'name': 'Остаток', 'slug': 'pa_stock', "has_archives": False}
     ]
