@@ -129,7 +129,7 @@ def create_attribute_terms(attribute, existing_terms, created_terms_value):
 def get_all_products():
     all_products = []
     page = 1
-    per_page = 900
+    per_page = 700
     total_pages = 1
     
     while page <= total_pages:
