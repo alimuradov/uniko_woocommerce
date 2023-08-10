@@ -116,6 +116,11 @@ def find_min_price(obj):
     min_price = min(item['price'] for item in obj)
     return min_price
 
+def find_max_price(obj):
+    max_price = max(item['price'] for item in obj)
+    return max_price
+
+
 
 def update_variations(existing_variations, new_stocks):
     updated_variations = []

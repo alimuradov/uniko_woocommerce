@@ -2,7 +2,7 @@ import time
 from utils.woocommerce import wcapi
 from utils.utils import get_attribute_id_by_name, group_products_by_codtmc, \
     get_field_values, generate_variations, get_stocks_meta, calculate_total_ost, find_min_price, \
-    get_unique_field_values
+    get_unique_field_values, find_max_price
 from .func import generate_slug
 
 def create_new_categories(existing_categories, all_categories):
@@ -297,7 +297,7 @@ def create_and_update_products(existing_products, created_products):
                 "sku": codtmc,
                 "type": "simple",
                 "categories": [{"id": category_id}] if category_id else [],
-                "regular_price": find_min_price(current_product),
+                "regular_price": find_max_price(current_product),
                 "manage_stock": False,
                 "stock_quantity": ostatok,
                 "stock_status": "instock" if ostatok > 0 else "outofstock",
@@ -407,7 +407,7 @@ def create_and_update_products(existing_products, created_products):
             pill = {
                 "id": existing_product['id'],
                 "name": name,
-                "regular_price": find_min_price(created_products[product]),
+                "regular_price": find_max_price(created_products[product]),
                 "categories": [{"id": category_id}] if category_id else [],
                 "stock_quantity": calculate_total_ost(created_products[product]),
                 "manage_stock": False,
