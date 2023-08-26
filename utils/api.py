@@ -495,7 +495,7 @@ def create_and_update_products(existing_products, created_products):
                         "options": get_field_values(current_product, 'scancod')
                     },                                                                                                                                                                                                           
                 ],
-                "meta_data": get_stocks_meta(current_product),                
+                "meta_data": [get_stocks_meta(current_product)],                
             }
             batch_update.append(pill)
 
