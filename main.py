@@ -144,7 +144,7 @@ for attribute in existing_attributes:
 existing_products = api.get_all_products()
 
 #Создаем товары
-api.create_and_update_products(existing_products, result['stocks'])
+api.create_and_update_products(existing_products, result['stocks'], existing_attributes, existing_categories)
 
 #Снова  получаем существующие товары
 # existing_products = api.get_all_products()

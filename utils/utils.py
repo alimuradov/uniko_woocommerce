@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 def ru_to_lat(st):
     if st == 'Аптека №149 (второй отдел)':
         return 'parafarm'
@@ -142,3 +144,23 @@ def strtobool (val):
         return 0
     else:
         raise ValueError("invalid truth value %r" % (val,))
+    
+
+def get_latest_date(objects):
+    valid_dates = []  # Список для хранения действительных дат
+
+    for obj in objects:
+        date_str = obj.get('datevalid')
+        if date_str:
+            try:
+                date = datetime.strptime(date_str, '%d.%m.%Y')
+                valid_dates.append(date)
+            except ValueError:
+                pass  # Пропустить неверные форматы дат
+
+    if valid_dates:
+        latest_date = max(valid_dates)
+    else:
+        latest_date = datetime.now() + timedelta(days=365 * 3)  # Текущая дата + 3 года
+
+    return latest_date.isoformat()    

@@ -2,7 +2,7 @@ import time
 from utils.woocommerce import wcapi
 from utils.utils import get_attribute_id_by_name, group_products_by_codtmc, \
     get_field_values, generate_variations, get_stocks_meta, calculate_total_ost, find_min_price, \
-    get_unique_field_values, find_max_price
+    get_unique_field_values, find_max_price,  get_latest_date
 from .func import generate_slug
 
 def create_new_categories(existing_categories, all_categories):
@@ -258,29 +258,67 @@ def create_products(existing_products, created_products):
         print("Нет новых товаров в порции")             
 
 
-def create_and_update_products(existing_products, created_products):
+def create_and_update_products(existing_products, created_products, existing_attributes, existing_categories):
     # Группируем массив по коду
     created_products = group_products_by_codtmc(created_products)
-
     batch_size = 100
+    batch_create = []  # Массив для хранения товаров, которые нужно создать
+    batch_update = []  # Массив для хранения товаров, которые нужно обновить 
+
     total_products = len(created_products)
     created_pills = []
+    
+    # Для начала мы проверяем существующие товары
+    # есть ли они в новой партии на обновление остатков, если их там нет,
+    # то мы для всех таких товаров обновляем статус остатка на "нет в наличии"
+    unstocked_products = []  #Обнуленные товары
+    i = 0
+    for exist_pill in existing_products:
+        sku = exist_pill.get("sku", "")
+        if int(sku) not in created_products:
+            pill = {
+                "id": exist_pill.get("id", ""),
+                "stock_status": "outofstock",    
+            }
+            unstocked_products.append(str(sku))
+            batch_update.append(pill)            
+        
+        if len(batch_update) == batch_size:
+            # Отправляем текущую порцию на создание и обновление
+            data = {"update": batch_update}
+            try:
+                response = wcapi.post("products/batch", data)
+                if response.status_code == 200:
+                    print(f"Обнулено {len(batch_update)} товаров - Batch {i // batch_size + 1}/{total_products // batch_size + 1}")
+                else:
+                    print(f"Ошибка обнулении товаров - Batch {i // batch_size + 1}/{total_products // batch_size + 1}")
+            except Exception as e:
+                print(f"Exception occurred while updating products - Batch {i // batch_size + 1}/{total_products // batch_size + 1}: {str(e)}")
+                time.sleep(30)  # Приостановить выполнение на 30 секунд
+            batch_update = []  # Обнуляем текущую порцию для обновления
+    
+    # Проверяем, остались ли товары в последней порции для  обнуления остатков
+    if  batch_update:
+        data = {"update": batch_update}
+        response = wcapi.post("products/batch", data)
+        if response.status_code == 200:
+            print(f"Обнулено {len(batch_update)} товаров")
+        else:
+            print("Ошибка при обнулении товаров")
+        batch_update = []  # Обнуляем текущую порцию для обновления    
+    else:
+        print("Нет новых товаров для обнуления")            
 
-    # Снова получаем все категории, они нам понадобятся при создании/обновлении товаров
-    existing_categories = wcapi.get("products/categories", params={"per_page": 100}).json()
-
-    # Получаем все атрибуты товаров на сайте
-    existing_attributes = wcapi.get("products/attributes", params={"per_page": 100}).json()
-
-    batch_create = []  # Массив для хранения товаров, которые нужно создать
-    batch_update = []  # Массив для хранения товаров, которые нужно обновить
     i = 0
     for product in created_products:
         i += 1
         codtmc = str(product)
         current_product = created_products[product]
+        
+        if codtmc in unstocked_products:
+            continue
 
-        if (codtmc not in created_pills) and  (codtmc not in [existing_product.get("sku", "") for existing_product in existing_products]):
+        if (codtmc not in created_pills) and (codtmc not in [existing_product.get("sku", "") for existing_product in existing_products]):
             # Создаем новый товар
             category_id = None
 
@@ -348,7 +386,7 @@ def create_and_update_products(existing_products, created_products):
                         "position": 0,
                         "visible": True,
                         "variation": False,
-                        "options": get_field_values(current_product, 'datevalid')
+                        "options": get_latest_date(current_product)
                     }, 
                     {
                         "id": get_attribute_id_by_name(existing_attributes, "Рецептурный"),
@@ -460,7 +498,7 @@ def create_and_update_products(existing_products, created_products):
                         "position": 0,
                         "visible": True,
                         "variation": False,
-                        "options": get_field_values(current_product, 'datevalid')
+                        "options": get_latest_date(current_product)
                     }, 
                     {
                         "id": get_attribute_id_by_name(existing_attributes, "Рецептурный"),
