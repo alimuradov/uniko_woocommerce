@@ -7,7 +7,7 @@ from utils  import api
 
 def get_stocks_from_dbf():
     ## Укажите путь к вашему файлу .dbf
-    pills = DBF('D:/dev/site/backend/dbf/ost.dbf', encoding='cp866')
+    pills = DBF('D:/dev/apteka149/uniko_woocommerce/files/ost.dbf', encoding='cp866')
     #pills = DBF('./ost.dbf', encoding='cp866')
     stocks = []
     #для катлога
