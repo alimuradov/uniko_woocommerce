@@ -1,3 +1,5 @@
+import os
+import requests
 from datetime import datetime, timedelta
 
 def ru_to_lat(st):
@@ -164,3 +166,26 @@ def get_latest_date(objects):
         latest_date = datetime.now() + timedelta(days=365 * 3)  # Текущая дата + 3 года
 
     return latest_date.isoformat()    
+
+
+def send_telegram_message(message):
+    """
+    Отправляет сообщение в группу Telegram.
+
+    Аргументы:
+    token (str): API токен вашего бота.
+    chat_id (str): Идентификатор чата или группы (отрицательное число).
+    message (str): Текст сообщения.
+    """
+    #Отправляем уведомление в telegramm
+    
+    token = os.getenv("TB_BOT_TOKEN")
+    chat_id = os.getenv("TG_CHAT_ID") 
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        'chat_id': chat_id,
+        'text': message
+    }
+    response = requests.post(url, data=payload)
+    return response

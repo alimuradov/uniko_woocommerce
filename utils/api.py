@@ -3,7 +3,7 @@ from utils.woocommerce import wcapi
 from utils.utils import get_attribute_id_by_name, group_products_by_codtmc, \
     get_field_values, generate_variations, get_stocks_meta, calculate_total_ost, find_min_price, \
     get_unique_field_values, find_max_price,  get_latest_date
-from .func import generate_slug
+from .func import generate_slug, remove_non_digits
 
 def create_new_categories(existing_categories, all_categories):
     # Создание списка новых категорий, отсутствующих в существующих категориях
@@ -274,7 +274,9 @@ def create_and_update_products(existing_products, created_products, existing_att
     unstocked_products = []  #Обнуленные товары
     i = 0
     for exist_pill in existing_products:
+        i += 1
         sku = exist_pill.get("sku", "")
+        sku = remove_non_digits(sku)
         if int(sku) not in created_products:
             pill = {
                 "id": exist_pill.get("id", ""),
@@ -533,7 +535,7 @@ def create_and_update_products(existing_products, created_products, existing_att
                         "options": get_field_values(current_product, 'scancod')
                     },                                                                                                                                                                                                           
                 ],
-                "meta_data": [],                
+                "meta_data": get_stocks_meta(current_product),                
             }
             batch_update.append(pill)
 

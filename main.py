@@ -1,14 +1,14 @@
 import datetime
 from dbfread import DBF
-from utils.utils import ru_to_lat
+from utils.utils import ru_to_lat, send_telegram_message
 from utils.woocommerce import wcapi
 from utils  import api
 
 
 def get_stocks_from_dbf():
     ## Укажите путь к вашему файлу .dbf
-    # pills = DBF('D:/dev/site/backend/dbf/ost.dbf', encoding='cp866')
-    pills = DBF('./ost.dbf', encoding='cp866')
+    pills = DBF('D:/dev/site/backend/dbf/ost.dbf', encoding='cp866')
+    #pills = DBF('./ost.dbf', encoding='cp866')
     stocks = []
     #для катлога
     for item in pills:
@@ -146,12 +146,6 @@ existing_products = api.get_all_products()
 #Создаем товары
 api.create_and_update_products(existing_products, result['stocks'], existing_attributes, existing_categories)
 
-#Снова  получаем существующие товары
-# existing_products = api.get_all_products()
-
-#Далее обходим все товары  и обновлям для них вариации.
-# api.create_variations(existing_products, result['stocks'])
-
 # Получаем время окончания выполнения скрипта
 end_time = datetime.datetime.now()
 print("Скрипт завершил выполнение:", end_time)
@@ -168,3 +162,9 @@ minutes = (execution_time.seconds % 3600) // 60
 
 # Выводим затраченное время в часах и минутах
 print("Затраченное время в часах и минутах:", hours, "ч", minutes, "мин")
+
+# Форматируем сообщение о затраченном времени
+time_info = f"Затраченное время в часах и минутах:: {int(hours)} ч {int(minutes)} мин"
+
+#отправляем сообщение в телеграмм
+send_telegram_message("Каталог сайта обновлен автоматически," + time_info)
