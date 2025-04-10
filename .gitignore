@@ -11,5 +11,5 @@ venv.bak/
 __pycache__/
 *.py[cod]
 *$py.class
-ost.dbf
+#*.dbf
 utils/__pycache__/
