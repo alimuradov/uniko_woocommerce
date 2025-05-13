@@ -151,7 +151,8 @@ def get_all_products():
     print("Всего получено "  + str(len(all_products)) + " товаров")
     return all_products
 
-def create_products(existing_products, created_products):
+def old_create_products(existing_products, created_products):
+    
     #Группируем массив по коду
     created_products = group_products_by_codtmc(created_products)
     
@@ -265,8 +266,13 @@ def create_and_update_products(existing_products, created_products, existing_att
     batch_create = []  # Массив для хранения товаров, которые нужно создать
     batch_update = []  # Массив для хранения товаров, которые нужно обновить 
 
-    total_products = len(created_products)
+    total_products = len(existing_products)
+    total_batches = (total_products + batch_size - 1) // batch_size  # Корректное округление вверх
     created_pills = []
+
+
+    # Создаем множество SKU для быстрого поиска
+    existing_skus = set(existing_product.get("sku", "") for existing_product in existing_products)
     
     # Для начала мы проверяем существующие товары
     # есть ли они в новой партии на обновление остатков, если их там нет,
@@ -277,6 +283,10 @@ def create_and_update_products(existing_products, created_products, existing_att
         i += 1
         sku = exist_pill.get("sku", "")
         sku = remove_non_digits(sku)
+
+        if not sku.isdigit():
+            continue
+
         if int(sku) not in created_products:
             pill = {
                 "id": exist_pill.get("id", ""),
@@ -287,16 +297,17 @@ def create_and_update_products(existing_products, created_products, existing_att
         
         if len(batch_update) == batch_size:
             # Отправляем текущую порцию на создание и обновление
+            current_batch = (i // batch_size) + 1
             data = {"update": batch_update}
             try:
                 response = wcapi.post("products/batch", data)
                 if response.status_code == 200:
-                    print(f"Обнулено {len(batch_update)} товаров - Batch {i // batch_size + 1}/{total_products // batch_size + 1}")
+                    print(f"Снято с остатка -  {len(batch_update)} товаров - Batch {current_batch}/{total_batches}")
                 else:
-                    print(f"Ошибка обнулении товаров - Batch {i // batch_size + 1}/{total_products // batch_size + 1}")
+                    print(f"Ошибка снятия товаров с остатка - Batch {current_batch}/{total_batches}")
             except Exception as e:
-                print(f"Exception occurred while updating products - Batch {i // batch_size + 1}/{total_products // batch_size + 1}: {str(e)}")
-                time.sleep(30)  # Приостановить выполнение на 30 секунд
+                print(f"Ошибка: {str(e)}")
+                time.sleep(20)  # Приостановить выполнение на 30 секунд
             batch_update = []  # Обнуляем текущую порцию для обновления
     
     # Проверяем, остались ли товары в последней порции для  обнуления остатков
@@ -311,7 +322,19 @@ def create_and_update_products(existing_products, created_products, existing_att
     else:
         print("Нет новых товаров для обнуления")            
 
+
+    # Создаем множество SKU для быстрого поиска
+
+    existing_skus = set()
+    for existing_product in existing_products:
+        sku = existing_product.get("sku", "")
+        if sku:
+            existing_skus.add(sku)
+        else:
+            print(f"Внимание: товар без SKU в existing_products: ID={existing_product.get('id')}")
+
     i = 0
+    batch_counter = 0  # Для последовательного вывода батчей, как обсуждалось ранее
     for product in created_products:
         i += 1
         codtmc = str(product)
@@ -320,7 +343,7 @@ def create_and_update_products(existing_products, created_products, existing_att
         if codtmc in unstocked_products:
             continue
 
-        if (codtmc not in created_pills) and (codtmc not in [existing_product.get("sku", "") for existing_product in existing_products]):
+        if (codtmc not in created_pills) and (codtmc not in existing_skus):
             # Создаем новый товар
             category_id = None
 
@@ -330,7 +353,8 @@ def create_and_update_products(existing_products, created_products, existing_att
                     break
 
             name = current_product[0]['name']
-            ostatok = calculate_total_ost(current_product)
+            ostatok = calculate_total_ost(current_product) 
+
             pill = {
                 "name": name,
                 "slug": generate_slug(name),
@@ -441,6 +465,10 @@ def create_and_update_products(existing_products, created_products, existing_att
                 if existing_product.get("sku", "") == codtmc:
                     break                
 
+            if existing_product is None:
+                print(f"Товар с SKU {codtmc} не найден в existing_products, пропускаем обновление")
+                continue  # Пропускаем, если товар не найден
+            
             name = current_product[0]['name']
             ostatok = calculate_total_ost(current_product) 
                           
@@ -449,7 +477,6 @@ def create_and_update_products(existing_products, created_products, existing_att
                 "name": name,
                 "regular_price": find_max_price(created_products[product]),
                 "categories": [{"id": category_id}] if category_id else [],
-                "stock_quantity": calculate_total_ost(created_products[product]),
                 "manage_stock": False,
                 "stock_quantity": ostatok,
                 "stock_status": "instock" if ostatok > 0 else "outofstock",
@@ -540,31 +567,38 @@ def create_and_update_products(existing_products, created_products, existing_att
             batch_update.append(pill)
 
         if len(batch_create) + len(batch_update) == batch_size:
-            # Отправляем текущую порцию на создание и обновление
+            batch_counter += 1
             data = {"create": batch_create, "update": batch_update}
             try:
                 response = wcapi.post("products/batch", data)
                 if response.status_code == 200:
-                    print(f"Создано {len(batch_create)} товаров и обновлено {len(batch_update)} товаров - Batch {i // batch_size + 1}/{total_products // batch_size + 1}")
+                    print(f"Создано {len(batch_create)} товаров и обновлено {len(batch_update)} товаров - Batch {batch_counter}/{total_products // batch_size + 1}")
                 else:
-                    print(f"Ошибка при создании/обновлении товаров - Batch {i // batch_size + 1}/{total_products // batch_size + 1}")
+                    print(f"Ошибка при создании/обновлении товаров - Batch {batch_counter}/{total_products // batch_size + 1}")
+                    print(f"Проблемный батч: create={len(batch_create)}, update={len(batch_update)}")
             except Exception as e:
-                print(f"Exception occurred while creating/updating products - Batch {i // batch_size + 1}/{total_products // batch_size + 1}: {str(e)}")
-                time.sleep(30)  # Приостановить выполнение на 30 секунд
-            batch_create = []  # Обнуляем текущую порцию для создания
-            batch_update = []  # Обнуляем текущую порцию для обновления
+                print(f"Exception occurred while creating/updating products - Batch {batch_counter}/{total_products // batch_size + 1}: {str(e)}")
+                time.sleep(30)
+            batch_create = []
+            batch_update = []
 
-    # Проверяем, остались ли товары в последней порции для создания и обновления
+    # Последний батч
     if batch_create or batch_update:
+        batch_counter += 1
         data = {"create": batch_create, "update": batch_update}
-        response = wcapi.post("products/batch", data)
-        if response.status_code == 200:
-            print(f"Создано {len(batch_create)} товаров и обновлено {len(batch_update)} товаров")
-        else:
-            print("Ошибка при создании/обновлении товаров")
+        try:
+            response = wcapi.post("products/batch", data)
+            if response.status_code == 200:
+                print(f"Создано {len(batch_create)} товаров и обновлено {len(batch_update)} товаров - Batch {batch_counter}/{total_products // batch_size + 1}")
+            else:
+                print(f"Ошибка при создании/обновлении товаров - Batch {batch_counter}/{total_products // batch_size + 1}")
+                print(f"Проблемный батч: create={len(batch_create)}, update={len(batch_update)}")
+        except Exception as e:
+            print(f"Exception occurred while creating/updating products - Batch {batch_counter}/{total_products // batch_size + 1}: {str(e)}")
+        batch_create = []
+        batch_update = []
     else:
         print("Нет новых товаров для создания и обновления")
-
 
 
 def create_variations(existing_products, created_products):
@@ -613,3 +647,357 @@ def create_variations(existing_products, created_products):
         except Exception as e:
             print(f"Ошибка при создании вариаций товара: {str(e)}")
                 
+def create_products(created_products, existing_attributes, existing_categories):
+    """
+    Создает новые товары поштучно в WooCommerce.
+    """
+    created_products = group_products_by_codtmc(created_products)
+    existing_skus = set()  # Множество SKU для проверки существующих товаров
+    created_pills = []     # Список созданных товаров
+
+    # Формируем множество SKU существующих товаров
+    for existing_product in existing_products:
+        sku = existing_product.get("sku", "")
+        if sku:
+            existing_skus.add(sku)
+        else:
+            print(f"Внимание: товар без SKU в existing_products: ID={existing_product.get('id')}")
+
+    total_products = len(created_products)
+    for i, product in enumerate(created_products, 1):
+        codtmc = str(product)
+        current_product = created_products[product]
+
+        if codtmc in existing_skus or codtmc in created_pills:
+            continue  # Пропускаем, если товар уже существует или был создан
+
+        # Находим ID категории
+        category_id = None
+        for category in existing_categories:
+            if category.get("name") == current_product[0]['group']:
+                category_id = category.get("id")
+                break
+
+        name = current_product[0]['name']
+        ostatok = calculaFte_total_ost(current_product)
+
+        # Формируем данные для нового товара
+        pill = {
+            "name": name,
+            "slug": generate_slug(name),
+            "sku": codtmc,
+            "type": "simple",
+            "categories": [{"id": category_id}] if category_id else [],
+            "regular_price": find_max_price(current_product),
+            "manage_stock": False,
+            "stock_quantity": ostatok,
+            "stock_status": "instock" if ostatok > 0 else "outofstock",
+            "attributes": [
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Фармгруппа"),
+                    "name": "Фармгруппа",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_field_values(current_product, 'farmgroup')
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Группа"),
+                    "name": "Группа",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_field_values(current_product, 'group')
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Производитель"),
+                    "name": "Производитель",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_field_values(current_product, 'factory')
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "МНН"),
+                    "name": "МНН",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_field_values(current_product, 'mnn')
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Бренд"),
+                    "name": "Бренд",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_field_values(current_product, 'brand')
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Срок годности"),
+                    "name": "Срок годности",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_latest_date(current_product)
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Рецептурный"),
+                    "name": "Рецептурный",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": ["Да" if current_product[0]['isrecept'] else "Нет"]
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Количество в упаковке"),
+                    "name": "Количество в упаковке",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_field_values(current_product, 'delupak')
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "ЖНВЛ"),
+                    "name": "ЖНВЛ",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": ["Да" if current_product[0]['islife'] else "Нет"]
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Штрихкод"),
+                    "name": "Штрихкод",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_unique_field_values(current_product, 'scancod')
+                },
+            ],
+            "meta_data": get_stocks_meta(current_product),
+        }
+
+        # Создаем товар поштучно
+        try:
+            response = wcapi.post("products", pill)
+            if response.status_code == 201:
+                print(f"Создан товар {codtmc} ({i}/{total_products})")
+                created_pills.append(codtmc)
+            else:
+                print(f"Ошибка при создании товара {codtmc}: {response.json()}")
+        except Exception as e:
+            print(f"Ошибка при создании товара {codtmc}: {str(e)}")
+            time.sleep(20)  # Пауза при ошибке
+
+    print(f"Создание завершено. Создано {len(created_pills)} новых товаров.")
+    return created_pills
+
+def update_products(existing_products, created_products, existing_attributes, existing_categories):
+    """
+    Обновляет остатки и данные существующих товаров в WooCommerce батчами.
+    """
+    created_products = group_products_by_codtmc(created_products)
+    batch_size = 100
+    batch_update = []
+    unstocked_products = []
+
+    total_products = len(existing_products)
+    total_batches = (total_products + batch_size - 1) // batch_size
+
+    # Обнуление остатков для товаров, отсутствующих в новой партии
+    for i, exist_pill in enumerate(existing_products, 1):
+        sku = exist_pill.get("sku", "")
+        sku = remove_non_digits(sku)
+
+        if not sku.isdigit():
+            continue
+
+        if int(sku) not in created_products:
+            pill = {
+                "id": exist_pill.get("id", ""),
+                "stock_status": "outofstock",
+            }
+            unstocked_products.append(str(sku))
+            batch_update.append(pill)
+
+        if len(batch_update) == batch_size:
+            current_batch = (i // batch_size) + 1
+            data = {"update": batch_update}
+            try:
+                response = wcapi.post("products/batch", data)
+                if response.status_code == 200:
+                    print(f"Снято с остатка - {len(batch_update)} товаров - Batch {current_batch}/{total_batches}")
+                else:
+                    print(f"Ошибка снятия товаров с остатка - Batch {current_batch}/{total_batches}")
+            except Exception as e:
+                print(f"Ошибка: {str(e)}")
+                time.sleep(20)
+            batch_update = []
+
+    if batch_update:
+        data = {"update": batch_update}
+        try:
+            response = wcapi.post("products/batch", data)
+            if response.status_code == 200:
+                print(f"Обнулено {len(batch_update)} товаров")
+            else:
+                print("Ошибка при обнулении товаров")
+        except Exception as e:
+            print(f"Ошибка: {str(e)}")
+        batch_update = []
+    else:
+        print("Нет товаров для обнуления")
+
+    # Обновление существующих товаров
+    batch_counter = 0
+    for i, product in enumerate(created_products, 1):
+        codtmc = str(product)
+        current_product = created_products[product]
+
+        if codtmc in unstocked_products:
+            continue
+
+        # Находим существующий товар
+        existing_product = None
+        for ep in existing_products:
+            if ep.get("sku", "") == codtmc:
+                existing_product = ep
+                break
+
+        if existing_product is None:
+            print(f"Товар с SKU {codtmc} не найден в existing_products, пропускаем обновление")
+            continue
+
+        # Находим ID категории
+        category_id = None
+        for category in existing_categories:
+            if category.get("name") == current_product[0]['group']:
+                category_id = category.get("id")
+                break
+
+        name = current_product[0]['name']
+        ostatok = calculate_total_ost(current_product)
+
+        # Формируем данные для обновления
+        pill = {
+            "id": existing_product['id'],
+            "name": name,
+            "regular_price": find_max_price(current_product),
+            "categories": [{"id": category_id}] if category_id else [],
+            "manage_stock": False,
+            "stock_quantity": ostatok,
+            "stock_status": "instock" if ostatok > 0 else "outofstock",
+            "attributes": [
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Фармгруппа"),
+                    "name": "Фармгруппа",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_field_values(current_product, 'farmgroup')
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Группа"),
+                    "name": "Группа",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_field_values(current_product, 'group')
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Производитель"),
+                    "name": "Производитель",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_field_values(current_product, 'factory')
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "МНН"),
+                    "name": "МНН",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_field_values(current_product, 'mnn')
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Бренд"),
+                    "name": "Бренд",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_field_values(current_product, 'brand')
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Срок годности"),
+                    "name": "Срок годности",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_latest_date(current_product)
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Рецептурный"),
+                    "name": "Рецептурный",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": ["Да" if current_product[0]['isrecept'] else "Нет"]
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Количество в упаковке"),
+                    "name": "Количество в упаковке",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_field_values(current_product, 'delupak')
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "ЖНВЛ"),
+                    "name": "ЖНВЛ",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": ["Да" if current_product[0]['islife'] else "Нет"]
+                },
+                {
+                    "id": get_attribute_id_by_name(existing_attributes, "Штрихкод"),
+                    "name": "Штрихкод",
+                    "position": 0,
+                    "visible": True,
+                    "variation": False,
+                    "options": get_unique_field_values(current_product, 'scancod')
+                },
+            ],
+            "meta_data": get_stocks_meta(current_product),
+        }
+        batch_update.append(pill)
+
+        if len(batch_update) == batch_size:
+            batch_counter += 1
+            data = {"update": batch_update}
+            try:
+                response = wcapi.post("products/batch", data)
+                if response.status_code == 200:
+                    print(f"Обновлено {len(batch_update)} товаров - Batch {batch_counter}/{total_products // batch_size + 1}")
+                else:
+                    print(f"Ошибка при обновлении товаров - Batch {batch_counter}/{total_products // batch_size + 1}")
+            except Exception as e:
+                print(f"Ошибка при обновлении: {str(e)}")
+                time.sleep(20)
+            batch_update = []
+
+    # Последний батч обновления
+    if batch_update:
+        batch_counter += 1
+        data = {"update": batch_update}
+        try:
+            response = wcapi.post("products/batch", data)
+            if response.status_code == 200:
+                print(f"Обновлено {len(batch_update)} товаров - Batch {batch_counter}/{total_products // batch_size + 1}")
+            else:
+                print(f"Ошибка при обновлении товаров - Batch {batch_counter}/{total_products // batch_size + 1}")
+        except Exception as e:
+            print(f"Ошибка при обновлении: {str(e)}")
+    else:
+        print("Нет товаров для обновления")

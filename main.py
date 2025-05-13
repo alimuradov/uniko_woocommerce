@@ -1,13 +1,20 @@
+import os
 import datetime
+from collections import defaultdict
 from dbfread import DBF
 from utils.utils import ru_to_lat, send_telegram_message
 from utils.woocommerce import wcapi
 from utils  import api
 
 
-def get_stocks_from_dbf():
+
+def get_stocks_seconds_dbf():
+    #получаем остатки второй аптечной сети
+    
     ## Укажите путь к вашему файлу .dbf
-    pills = DBF('D:/dev/apteka149/uniko_woocommerce/files/ost.dbf', encoding='cp866')
+    files_catalog_path = os.getenv("FILES_CATALOG_PATH")
+    dbf_file_path = os.path.join(files_catalog_path, 'agasieva.dbf') 
+    pills = DBF(dbf_file_path, encoding='cp866')
     #pills = DBF('./ost.dbf', encoding='cp866')
     stocks = []
     #для катлога
@@ -35,42 +42,102 @@ def get_stocks_from_dbf():
             }
         stocks.append(goods_row)
     
-    # Получение всех уникальных значений поля "Фармгруппа"
-    farmgroups = set(item['farmgroup'] for item in stocks)
-    farmgroups_list = list(farmgroups)
+    return stocks  
+
+def get_stocks_from_dbf():
+    ## Укажите путь к вашему файлу .dbf
+    files_catalog_path = os.getenv("FILES_CATALOG_PATH")
+    dbf_file_path = os.path.join(files_catalog_path, 'ost.dbf') 
+    pills = DBF(dbf_file_path, encoding='cp866')
+
+    stocks = []
+
+    # Список филиалов
+    filial_list = set()
+
+    #получаем остатки  аптечной сети Панация
+    stocks_panaceya = get_stocks_seconds_dbf()
+
+    # Создаем словарь для быстрого поиска по scancod
+    panaceya_by_scancod = defaultdict(list)
+    for stock in stocks_panaceya:
+        scancod = stock['scancod'].strip()
+        panaceya_by_scancod[scancod].append(stock)    
 
 
-    # Получение всех уникальных значений поля "группа"
-    groups = set(item['group'] for item in stocks)
-    groups_list = list(groups)
+    # Обрабатываем первую сеть (ost.dbf)
+    for item in pills:
+        goods_row = {
+            'name': item['NAMETMC'],  #Наименование товара
+            'ost': item['OST'], #Остаток товара
+            'price': item['PRICE'], #Цена
+            'mnn': item['MNN'].strip(), #Международное непотентованное название
+            'slugpodr': ru_to_lat(item['NAMEPODR'].strip()), #Slug аптеки
+            'namepodr': item['NAMEPODR'].strip(), #Название аптеки 
+            'isrecept': item['ISRECEPT'], #Рецептурный
+            'farmgroup': item['FARMGROUP'].strip(), #Фармгруппа
+            'measure': item['MEASURE'].strip(), #Единица измерения
+            'delupak': item['DELUPAK'], #Количество единиц в упаковке
+            'islife': item['ISLIFE'], #ЖНВЛ
+            'group': item['GROUP'].strip(), #Группа товара
+            'codtmc': item['CODTMC'], #Код товара
+            'factory': item['FACTORY'].strip(), #Производитель
+            'category': item['CATEGORY'].strip(), #Категория товара
+            'datevalid': item['DATEVALID'], #Срок годности
+            'brand': item['BRAND'].strip(), #Бренд
+            'pricedeli': item['PRICEDELI'], #Цена закупки
+            'scancod': item['SCANCOD'].strip() #Штрихкод]
+            }
+        stocks.append(goods_row)
+        filial_list.add(item['NAMEPODR'].strip())
 
-    # Получение всех уникальных значений справочника МНН
-    mnn = set(item['mnn'] for item in stocks)
-    mnn_list = list(mnn)
+        # Множество для отслеживания комбинаций scancod + namepodr только для stocks_panaceya
+        added_panaceya_combinations = set()
+
+        # Находим совпадения по scancod
+        scancod = item['SCANCOD'].strip()
+        if scancod in panaceya_by_scancod:
+            for stock in panaceya_by_scancod[scancod]:
+                namepodr_raw = stock['namepodr'].strip()
+                
+                # Определяем название филиала
+                name_farmaci = ''
+                if namepodr_raw == 'Агасиева 17а':
+                    name_farmaci = 'Аптека №149 (Агасиева 17А)'
+                elif namepodr_raw == 'ПФ (второй отдел)':
+                    name_farmaci = 'Аптека №149 (второй отдел)'
+                elif namepodr_raw == 'г. Огни ул. Революции 52б':
+                    name_farmaci = 'Аптека №149 (Даг. Огни ул. Революции 52б)'
+                
+                if not name_farmaci:
+                    continue
+                
+                # Проверяем дубликаты
+                combination = (scancod, name_farmaci)
+                if combination in added_panaceya_combinations:
+                    continue
+                
+                # Создаем новую запись
+                new_goods_row = goods_row.copy()
+                new_goods_row['ost'] = stock['ost']
+                new_goods_row['namepodr'] = name_farmaci
+                new_goods_row['slugpodr'] = ru_to_lat(namepodr_raw)
+                
+                # Добавляем запись
+                stocks.append(new_goods_row)
+                added_panaceya_combinations.add(combination)
+                filial_list.add(name_farmaci) 
     
-    # Получение всех уникальных значений единиц измерения
-    measure = set(item['measure'] for item in stocks)
-    measure_list = list(measure)
-
-    # Получение всех уникальных значений справочника Проиозводители
-    factory = set(item['factory'] for item in stocks)
-    factory_list = list(factory)
-
-    # Получение всех уникальных значений справочника Категории товаров
-    category = set(item['category'] for item in stocks)
-    category_list = list(category)
+    # Получаем уникальные значения
+    farmgroups_list = list(set(item['farmgroup'] for item in stocks))
+    groups_list = list(set(item['group'] for item in stocks))
+    mnn_list = list(set(item['mnn'] for item in stocks))
+    measure_list = list(set(item['measure'] for item in stocks))
+    factory_list = list(set(item['factory'] for item in stocks))
+    category_list = list(set(item['category'] for item in stocks))
+    brand_list = list(set(item['brand'] for item in stocks))
+    codtmc_list = list(set(item['codtmc'] for item in stocks))
     
-    # Получение всех уникальных значений справочника Категории товаров
-    brand = set(item['brand'] for item in stocks)
-    brand_list = list(brand) 
-
-    # Получение всех уникальных значений справочника Филиалы
-    filial = set(item['namepodr'] for item in stocks)
-    filial_list = list(filial) 
-
-    # Получение всех уникальных значений справочника товары, фильруем по артикулу
-    codtmc = set(item['codtmc'] for item in stocks)
-    codtmc_list = list(codtmc)  
     print('Товаров в выгрузке ' + str(len(codtmc_list)))
     print('Партий в выгрузке ' + str(len(stocks)))              
 
@@ -83,7 +150,7 @@ def get_stocks_from_dbf():
         'stocks': stocks,
         'farmgroups': farmgroups_list,
         'groups': groups_list,
-        'filials': filial_list,
+        'filials': list(filial_list),
     }
 
 
@@ -92,6 +159,9 @@ start_time = datetime.datetime.now()
 print("Скрипт начал выполнение:", start_time)
 
 result = get_stocks_from_dbf()
+
+print("Завершена подготовка данных для импорта:",  datetime.datetime.now())
+
 #Получаем все категории товаров на сайте
 existing_categories = wcapi.get("products/categories", params={"per_page": 100}).json()
 
@@ -143,8 +213,10 @@ for attribute in existing_attributes:
 #Получаем существующие товары
 existing_products = api.get_all_products()
 
-#Создаем товары
+# #Создаем товары
 api.create_and_update_products(existing_products, result['stocks'], existing_attributes, existing_categories)
+
+
 
 # Получаем время окончания выполнения скрипта
 end_time = datetime.datetime.now()

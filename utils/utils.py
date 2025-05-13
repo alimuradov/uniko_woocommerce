@@ -3,7 +3,7 @@ import requests
 from datetime import datetime, timedelta
 
 def ru_to_lat(st):
-    if st == 'Аптека №149 (второй отдел)':
+    if st == 'ПФ (второй отдел)':
         return 'parafarm'
     if st == 'Аптека №149 (Шеболдаева 49в)':
         return 'sheboldaeva'    
@@ -11,7 +11,7 @@ def ru_to_lat(st):
         return 'xizroeva'
     elif st == 'Аптека №149 (Агасиева 26А)':
         return 'agasieva26'            
-    elif st == 'Аптека №149 (Агасиева 17А)':
+    elif st == 'Агасиева 17а':
         return 'agasieva17'
     elif st == 'Аптека №149 (Ленина 86)':
         return 'lenina86'
@@ -25,6 +25,8 @@ def ru_to_lat(st):
         return 'globus'
     elif st == 'Аптека №149 (ул. Пушкина 50)':
         return 'pushkina'
+    elif st == 'г. Огни ул. Революции 52б':
+        return 'ogni_2'
     else:
         return '' 
     
@@ -102,12 +104,30 @@ def generate_variations(objects, existing_attributes):
 
 
 def get_stocks_meta(obj):
-    stocks_meta = []
+    # Словарь для хранения суммарных остатков по филиалам
+    stocks_by_filial = {}
+
+    # Группируем остатки по namepodr
     for item in obj:
         stock_name = item['namepodr']
-        stock_ost = item['ost']
-        stocks_meta.append({'key': stock_name, 'value': stock_ost})
+        try:
+            stock_ost = float(item['ost'])  # Преобразуем остаток в число
+        except (ValueError, TypeError):
+            stock_ost = 0  # Если остаток некорректен, считаем его нулевым
+
+        if stock_name in stocks_by_filial:
+            stocks_by_filial[stock_name] += stock_ost
+        else:
+            stocks_by_filial[stock_name] = stock_ost
+
+    # Преобразуем словарь в список мета-полей
+    stocks_meta = [
+        {'key': stock_name, 'value': str(stock_ost)}  # Преобразуем обратно в строку для мета-поля
+        for stock_name, stock_ost in stocks_by_filial.items()
+    ]
+
     return stocks_meta
+
 
 def calculate_total_ost(obj):
     total_ost = sum(item['ost'] for item in obj)
