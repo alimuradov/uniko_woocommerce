@@ -8,12 +8,21 @@ from utils.woocommerce import wcapi
 from utils  import api
 
 
+def get_file_modification_date(file_path):
+    try:
+        modified_ts = os.path.getmtime(file_path)
+        return datetime.datetime.fromtimestamp(modified_ts).date()
+    except OSError:
+        return None
+
+
 def get_stocks_seconds_dbf():
     #получаем остатки второй аптечной сети
     
     ## Укажите путь к вашему файлу .dbf
     files_catalog_path = os.getenv("FILES_CATALOG_PATH")
-    dbf_file_path = os.path.join(files_catalog_path, 'agasieva.dbf') 
+    dbf_file_path = os.path.join(files_catalog_path, 'agasieva.dbf')
+    agasieva_file_date = get_file_modification_date(dbf_file_path)
     pills = DBF(dbf_file_path, encoding='cp866')
     #pills = DBF('./ost.dbf', encoding='cp866')
     stocks = []
@@ -42,12 +51,13 @@ def get_stocks_seconds_dbf():
             }
         stocks.append(goods_row)
     
-    return stocks  
+    return stocks, agasieva_file_date
 
 def get_stocks_from_dbf():
     ## Укажите путь к вашему файлу .dbf
     files_catalog_path = os.getenv("FILES_CATALOG_PATH")
-    dbf_file_path = os.path.join(files_catalog_path, 'ost.dbf') 
+    dbf_file_path = os.path.join(files_catalog_path, 'ost.dbf')
+    ost_file_date = get_file_modification_date(dbf_file_path)
     pills = DBF(dbf_file_path, encoding='cp866')
 
     stocks = []
@@ -56,7 +66,7 @@ def get_stocks_from_dbf():
     filial_list = set()
 
     #получаем остатки  аптечной сети Панация
-    stocks_panaceya = get_stocks_seconds_dbf()
+    stocks_panaceya, agasieva_file_date = get_stocks_seconds_dbf()
 
     # Создаем словарь для быстрого поиска по scancod
     panaceya_by_scancod = defaultdict(list)
@@ -154,6 +164,10 @@ def get_stocks_from_dbf():
         'farmgroups': farmgroups_list,
         'groups': groups_list,
         'filials': list(filial_list),
+        'file_dates': {
+            'ost.dbf': ost_file_date,
+            'agasieva.dbf': agasieva_file_date,
+        },
     }
 
 
@@ -239,10 +253,34 @@ minutes = (execution_time.seconds % 3600) // 60
 print("Затраченное время в часах и минутах:", hours, "ч", minutes, "мин")
 
 # Форматируем сообщение о затраченном времени
-time_info = f"Затраченное время в часах и минутах:: {int(hours)} ч {int(minutes)} мин"
+time_info = f"Затраченное время в часах и минутах: {int(hours)} ч {int(minutes)} мин"
+
+# Формируем информацию об актуальности файлов
+today = datetime.date.today()
+file_dates = result.get('file_dates', {})
+file_labels = {
+    'ost.dbf': 'Остатки ИП Магомедова Ш.А',
+    'agasieva.dbf': 'Остатки ООО Панацея',
+}
+file_status_lines = []
+for filename, file_date in file_dates.items():
+    label = file_labels.get(filename, filename)
+    if not file_date:
+        file_status_lines.append(f"{label}: дата не определена")
+    elif file_date != today:
+        file_status_lines.append(f"Внимание: {label} датирован {file_date}")
+    else:
+        file_status_lines.append(f"{label} актуальны на: {file_date}")
+
+# Итоговое сообщение
+message_lines = [
+    "Каталог сайта обновлен.",
+    time_info,
+] + file_status_lines
+message = "\n".join(message_lines)
 
 #отправляем сообщение в телеграмм
-# send_telegram_message("Каталог сайта обновлен автоматически," + time_info)
+# send_telegram_message(message)
 url = "https://n8n.alimuradov.ru/webhook/fc931587-9fed-4f36-86ff-bf53322860ac"
-response = requests.get(url)
+response = requests.post(url, json={"text": message}, timeout=30)
 print("\nОтвет с заголовками:", response.json())
