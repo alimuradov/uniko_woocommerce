@@ -1,11 +1,11 @@
 import os
 import datetime
+import requests
 from collections import defaultdict
 from dbfread import DBF
 from utils.utils import ru_to_lat, send_telegram_message
 from utils.woocommerce import wcapi
 from utils  import api
-
 
 
 def get_stocks_seconds_dbf():
@@ -60,6 +60,10 @@ def get_stocks_from_dbf():
 
     # Создаем словарь для быстрого поиска по scancod
     panaceya_by_scancod = defaultdict(list)
+
+    # Множество для отслеживания комбинаций scancod + namepodr только для stocks_panaceya
+    added_panaceya_combinations = set()
+    
     for stock in stocks_panaceya:
         scancod = stock['scancod'].strip()
         panaceya_by_scancod[scancod].append(stock)    
@@ -91,8 +95,6 @@ def get_stocks_from_dbf():
         stocks.append(goods_row)
         filial_list.add(item['NAMEPODR'].strip())
 
-        # Множество для отслеживания комбинаций scancod + namepodr только для stocks_panaceya
-        added_panaceya_combinations = set()
 
         # Находим совпадения по scancod
         scancod = item['SCANCOD'].strip()
@@ -125,6 +127,7 @@ def get_stocks_from_dbf():
                 
                 # Добавляем запись
                 stocks.append(new_goods_row)
+                print(f"Добавлена запись: scancod={new_goods_row['scancod']}, namepodr={new_goods_row['namepodr']}, ost={new_goods_row['ost']}")
                 added_panaceya_combinations.add(combination)
                 filial_list.add(name_farmaci) 
     
@@ -239,4 +242,7 @@ print("Затраченное время в часах и минутах:", hour
 time_info = f"Затраченное время в часах и минутах:: {int(hours)} ч {int(minutes)} мин"
 
 #отправляем сообщение в телеграмм
-send_telegram_message("Каталог сайта обновлен автоматически," + time_info)
+# send_telegram_message("Каталог сайта обновлен автоматически," + time_info)
+url = "https://n8n.alimuradov.ru/webhook/fc931587-9fed-4f36-86ff-bf53322860ac"
+response = requests.get(url)
+print("\nОтвет с заголовками:", response.json())
