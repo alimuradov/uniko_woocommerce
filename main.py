@@ -281,6 +281,6 @@ message = "\n".join(message_lines)
 
 #отправляем сообщение в телеграмм
 # send_telegram_message(message)
-url = "https://n8n.alimuradov.ru/webhook/fc931587-9fed-4f36-86ff-bf53322860ac"
+url = "https://n9n.alimuradov.ru/webhook/fc931587-9fed-4f36-86ff-bf53322860ac"
 response = requests.post(url, json={"text": message}, timeout=30)
 print("\nОтвет с заголовками:", response.json())
