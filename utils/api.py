@@ -7,8 +7,10 @@ from .func import generate_slug, remove_non_digits
 
 def create_new_categories(existing_categories, all_categories):
     # Создание списка новых категорий, отсутствующих в существующих категориях
-    existing_categories = [ item['name'].strip() for item in existing_categories]
-    new_categories = [category for category in all_categories if category not in existing_categories]
+    # Сравнение без учета регистра, т.к. название категории на сайте могло быть
+    # отредактировано вручную (например "БАДы" в DBF -> "Бады" на сайте)
+    existing_names = {item['name'].strip().lower() for item in existing_categories}
+    new_categories = [category for category in all_categories if category.strip().lower() not in existing_names]
 
     # Подготовка данных для создания новых категорий
     data = {
@@ -346,14 +348,14 @@ def create_and_update_products(existing_products, created_products, existing_att
         if (codtmc not in created_pills) and (codtmc not in existing_skus):
             # Создаем новый товар
             category_id = None
-
+            group_lower = current_product[0]['group'].strip().lower()
             for category in existing_categories:
-                if category.get("name") == current_product[0]['group']:
+                if category.get("name", "").strip().lower() == group_lower:
                     category_id = category.get("id")
                     break
 
             name = current_product[0]['name']
-            ostatok = calculate_total_ost(current_product) 
+            ostatok = calculate_total_ost(current_product)
 
             pill = {
                 "name": name,
@@ -452,11 +454,11 @@ def create_and_update_products(existing_products, created_products, existing_att
             batch_create.append(pill)
             created_pills.append(codtmc)
         else:
-            # Обновляем существующий товар 
+            # Обновляем существующий товар
             category_id = None
-
+            group_lower = current_product[0]['group'].strip().lower()
             for category in existing_categories:
-                if category.get("name") == current_product[0]['group']:
+                if category.get("name", "").strip().lower() == group_lower:
                     category_id = category.get("id")
                     break
 
