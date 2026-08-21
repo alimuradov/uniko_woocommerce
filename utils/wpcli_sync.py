@@ -87,34 +87,11 @@ def _connect():
     return ssh
 
 
-def sync_products_via_wpcli(stocks):
-    """Синк товаров напрямую на сервере через WP-CLI/WooCommerce CRUD вместо
-    REST-батчей. Отдельная точка входа от utils.api.create_and_update_products -
-    ничего в utils/api.py не меняется, main.py выбирает один из двух вызовов.
-    """
-    payload = build_products_payload(stocks)
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False)
-        local_path = f.name
-
-    remote_path = f"{REMOTE_TMP_DIR.rstrip('/')}/uniko_sync_{int(time.time())}.json"
-
-    ssh = None
-    last_error = None
-    for _ in range(2):
-        try:
-            ssh = _connect()
-            break
-        except Exception as e:
-            last_error = e
-            time.sleep(10)
-
-    if ssh is None:
-        os.unlink(local_path)
-        raise RuntimeError(f"Не удалось подключиться по SSH к {SSH_HOST}: {last_error}")
-
+def _upload_and_run(local_path):
+    """Одна попытка: подключиться, залить payload, выполнить sync_products.php."""
+    ssh = _connect()
     try:
+        remote_path = f"{REMOTE_TMP_DIR.rstrip('/')}/uniko_sync_{int(time.time())}.json"
         sftp = ssh.open_sftp()
         sftp.put(local_path, remote_path)
 
@@ -154,6 +131,34 @@ def sync_products_via_wpcli(stocks):
         return summary
     finally:
         ssh.close()
+
+
+def sync_products_via_wpcli(stocks):
+    """Синк товаров напрямую на сервере через WP-CLI/WooCommerce CRUD вместо
+    REST-батчей. Отдельная точка входа от utils.api.create_and_update_products -
+    ничего в utils/api.py не меняется, main.py выбирает один из двух вызовов.
+    """
+    payload = build_products_payload(stocks)
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False)
+        local_path = f.name
+
+    try:
+        last_error = None
+        # Ретрай покрывает весь цикл подключение+заливка+выполнение, а не
+        # только подключение - разрыв SSH-сессии может случиться и посреди
+        # заливки payload (напр. "Corrupted MAC on input"), а не только при
+        # установке соединения.
+        for attempt in range(2):
+            try:
+                return _upload_and_run(local_path)
+            except Exception as e:
+                last_error = e
+                print(f"Попытка синка {attempt + 1}/2 не удалась: {e}")
+                time.sleep(10)
+        raise RuntimeError(f"Синк через WP-CLI не удался за 2 попытки: {last_error}")
+    finally:
         try:
             os.unlink(local_path)
         except OSError:
