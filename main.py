@@ -6,6 +6,7 @@ from dbfread import DBF
 from utils.utils import ru_to_lat, send_telegram_message
 from utils.woocommerce import wcapi
 from utils  import api
+from utils import wpcli_sync
 
 
 def get_file_modification_date(file_path):
@@ -227,11 +228,14 @@ for attribute in existing_attributes:
         existing_attribute_terms = api.get_attribute_terms(attribute)
         api.create_attribute_terms(attribute, existing_attribute_terms, created_terms) 
 
-#Получаем существующие товары
-existing_products = api.get_all_products()
-
-# #Создаем товары
-api.create_and_update_products(existing_products, result['stocks'], existing_attributes, existing_categories)
+#Синк товаров напрямую на сервере через WP-CLI/WooCommerce CRUD (быстрее и
+#надёжнее REST-батчей на большом объёме - см. utils/wpcli_sync.py).
+#Проверено end-to-end на полном каталоге (10318/10318 товаров, 0 ошибок).
+#Старый REST-путь оставлен в utils/api.py как fallback: чтобы вернуться,
+#замените вызов ниже на:
+#   existing_products = api.get_all_products()
+#   api.create_and_update_products(existing_products, result['stocks'], existing_attributes, existing_categories)
+sync_result = wpcli_sync.sync_products_via_wpcli(result['stocks'])
 
 
 
@@ -277,6 +281,17 @@ message_lines = [
     "Каталог сайта обновлен.",
     time_info,
 ] + file_status_lines
+
+sync_summary_line = (
+    f"Товары: создано {sync_result.get('created', 0)}, "
+    f"обновлено {sync_result.get('updated', 0)}, "
+    f"снято с остатка {sync_result.get('outofstock', 0)}, "
+    f"ошибок {sync_result.get('errors', 0)}"
+)
+message_lines.append(sync_summary_line)
+if sync_result.get('error_skus'):
+    message_lines.append("SKU с ошибками: " + ", ".join(sync_result['error_skus']))
+
 message = "\n".join(message_lines)
 
 #отправляем сообщение в телеграмм

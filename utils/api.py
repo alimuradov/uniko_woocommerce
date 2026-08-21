@@ -409,13 +409,18 @@ def create_and_update_products(existing_products, created_products, existing_att
                         "options": get_field_values(current_product, 'brand')
                     }, 
                     {
-                        "id": get_attribute_id_by_name(existing_attributes, "Срок годности"),
+                        # id=0 -> кастомный (не таксономийный) атрибут: значение
+                        # хранится прямо в товаре, term'ы не создаются. Дата
+                        # годности почти уникальна на партию - как таксономия
+                        # она раздула pa_datevalid до 2.77 млн термов и положила
+                        # bootstrap WordPress/WooCommerce. Не делать global/select.
+                        "id": 0,
                         "name": "Срок годности",
                         "position": 0,
                         "visible": True,
                         "variation": False,
-                        "options": get_latest_date(current_product)
-                    }, 
+                        "options": [get_latest_date(current_product)]
+                    },
                     {
                         "id": get_attribute_id_by_name(existing_attributes, "Рецептурный"),
                         "name": "Рецептурный",
@@ -423,7 +428,7 @@ def create_and_update_products(existing_products, created_products, existing_att
                         "visible": True,
                         "variation": False,
                         "options": ["Да" if current_product[0]['isrecept'] else "Нет"]
-                    }, 
+                    },
                     {
                         "id": get_attribute_id_by_name(existing_attributes, "Количество в упаковке"),
                         "name": "Количество в упаковке",
@@ -431,7 +436,7 @@ def create_and_update_products(existing_products, created_products, existing_att
                         "visible": True,
                         "variation": False,
                         "options": get_field_values(current_product, 'delupak')
-                    }, 
+                    },
                     {
                         "id": get_attribute_id_by_name(existing_attributes, "ЖНВЛ"),
                         "name": "ЖНВЛ",
@@ -439,7 +444,7 @@ def create_and_update_products(existing_products, created_products, existing_att
                         "visible": True,
                         "variation": False,
                         "options": ["Да" if current_product[0]['islife'] else "Нет"]
-                    }, 
+                    },
                     {
                         "id": get_attribute_id_by_name(existing_attributes, "Штрихкод"),
                         "name": "Штрихкод",
@@ -447,7 +452,7 @@ def create_and_update_products(existing_products, created_products, existing_att
                         "visible": True,
                         "variation": False,
                         "options": get_unique_field_values(current_product, 'scancod')
-                    },                                                                                                                                                                                                           
+                    },
                 ],
                 "meta_data": get_stocks_meta(current_product),
             }
@@ -524,21 +529,25 @@ def create_and_update_products(existing_products, created_products, existing_att
                         "options": get_field_values(current_product, 'brand')
                     }, 
                     {
-                        "id": get_attribute_id_by_name(existing_attributes, "Срок годности"),
+                        # id=0 -> кастомный (не таксономийный) атрибут - см.
+                        # тот же комментарий в create-ветке выше. Дата годности
+                        # почти уникальна на партию, как select-атрибут раздула
+                        # pa_datevalid до 2.77 млн термов и положила bootstrap.
+                        "id": 0,
                         "name": "Срок годности",
                         "position": 0,
                         "visible": True,
                         "variation": False,
-                        "options": get_latest_date(current_product)
-                    }, 
+                        "options": [get_latest_date(current_product)]
+                    },
                     {
                         "id": get_attribute_id_by_name(existing_attributes, "Рецептурный"),
                         "name": "Рецептурный",
                         "position": 0,
                         "visible": True,
                         "variation": False,
-                        "options": [current_product[0]['isrecept']]
-                    }, 
+                        "options": ["Да" if current_product[0]['isrecept'] else "Нет"]
+                    },
                     {
                         "id": get_attribute_id_by_name(existing_attributes, "Количество в упаковке"),
                         "name": "Количество в упаковке",
@@ -546,22 +555,22 @@ def create_and_update_products(existing_products, created_products, existing_att
                         "visible": True,
                         "variation": False,
                         "options": get_field_values(current_product, 'delupak')
-                    }, 
+                    },
                     {
                         "id": get_attribute_id_by_name(existing_attributes, "ЖНВЛ"),
                         "name": "ЖНВЛ",
                         "position": 0,
                         "visible": True,
                         "variation": False,
-                        "options": [current_product[0]['islife']]
-                    }, 
+                        "options": ["Да" if current_product[0]['islife'] else "Нет"]
+                    },
                     {
                         "id": get_attribute_id_by_name(existing_attributes, "Штрихкод"),
                         "name": "Штрихкод",
                         "position": 0,
                         "visible": True,
                         "variation": False,
-                        "options": get_field_values(current_product, 'scancod')
+                        "options": get_unique_field_values(current_product, 'scancod')
                     },                                                                                                                                                                                                           
                 ],
                 "meta_data": get_stocks_meta(current_product),                
