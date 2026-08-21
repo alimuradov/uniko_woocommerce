@@ -47,7 +47,7 @@ def create_new_attributes(existing_attributes):
         {'name': 'Количество в упаковке', 'slug': 'pa_delupak', "has_archives": False},
         {'name': 'Единица измерения', 'slug': 'pa_measure', "has_archives": False},
         {'name': 'ЖНВЛ', 'slug': 'pa_islife', "has_archives": False},
-        {'name': 'Штрихкод', 'slug': 'pa_scancod', "has_archives": True, "type": "select"},
+        {'name': 'Штрихкод', 'slug': 'pa_scancod', "has_archives": False},
         {'name': 'Цена', 'slug': 'pa_price', "has_archives": False},
         {'name': 'Остаток', 'slug': 'pa_stock', "has_archives": False}
     ]
@@ -446,7 +446,12 @@ def create_and_update_products(existing_products, created_products, existing_att
                         "options": ["Да" if current_product[0]['islife'] else "Нет"]
                     },
                     {
-                        "id": get_attribute_id_by_name(existing_attributes, "Штрихкод"),
+                        # id=0 -> кастомный (не таксономийный) атрибут - тот же
+                        # случай, что и "Срок годности" выше: штрихкод почти
+                        # уникален на партию, как select-атрибут раздул
+                        # pa_scancod до ~30 000 термов (тот же паттерн, что
+                        # положил pa_datevalid). Не делать global/select.
+                        "id": 0,
                         "name": "Штрихкод",
                         "position": 0,
                         "visible": True,
@@ -565,15 +570,20 @@ def create_and_update_products(existing_products, created_products, existing_att
                         "options": ["Да" if current_product[0]['islife'] else "Нет"]
                     },
                     {
-                        "id": get_attribute_id_by_name(existing_attributes, "Штрихкод"),
+                        # id=0 -> кастомный (не таксономийный) атрибут - см.
+                        # тот же комментарий в create-ветке выше. Штрихкод
+                        # почти уникален на партию, как select-атрибут раздул
+                        # pa_scancod до ~30 000 термов (тот же паттерн, что
+                        # положил pa_datevalid).
+                        "id": 0,
                         "name": "Штрихкод",
                         "position": 0,
                         "visible": True,
                         "variation": False,
                         "options": get_unique_field_values(current_product, 'scancod')
-                    },                                                                                                                                                                                                           
+                    },
                 ],
-                "meta_data": get_stocks_meta(current_product),                
+                "meta_data": get_stocks_meta(current_product),
             }
             batch_update.append(pill)
 

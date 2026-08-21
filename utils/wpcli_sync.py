@@ -58,14 +58,16 @@ def build_products_payload(stocks):
                 "pa_isrecept": ["Да" if group[0]['isrecept'] else "Нет"],
                 "pa_delupak": get_field_values(group, 'delupak'),
                 "pa_islife": ["Да" if group[0]['islife'] else "Нет"],
-                "pa_scancod": get_unique_field_values(group, 'scancod'),
             },
             # Кастомные (не таксономийные) атрибуты - значение хранится прямо в
-            # товаре, term'ы не создаются. "Срок годности" почти уникален для
-            # каждой партии - как таксономия он раздул pa_datevalid до 2.77 млн
-            # термов и положил bootstrap WordPress/WooCommerce. Не повторять.
+            # товаре, term'ы не создаются. "Срок годности" почти уникальна для
+            # каждой партии, "Штрихкод" почти уникален на партию - как таксономия
+            # они раздули pa_datevalid до 2.77 млн термов (и по тому же паттерну
+            # pa_scancod до ~30 000) и положили bootstrap WordPress/WooCommerce.
+            # Не повторять.
             "custom_attributes": {
                 "Срок годности": get_latest_date(group),
+                "Штрихкод": get_unique_field_values(group, 'scancod'),
             },
             "meta_data": {item['key']: item['value'] for item in get_stocks_meta(group)},
         })

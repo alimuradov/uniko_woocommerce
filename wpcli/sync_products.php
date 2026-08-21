@@ -107,6 +107,12 @@ foreach ($existing as $sku => $info) {
             continue;
         }
         $product->set_stock_status('outofstock');
+        // Товар пропал из выгрузки целиком - у него больше нет ни одного
+        // поставляющего филиала, поэтому чистим весь накопленный остаток по
+        // филиалам (см. тот же диф ниже, в ветке обновления).
+        foreach ($product->get_meta_data() as $meta) {
+            $product->delete_meta_data($meta->key);
+        }
         $product->save();
         $outofstock++;
     } catch (\Throwable $e) {
@@ -164,23 +170,42 @@ foreach ($payload as $row) {
         }
         // Кастомные (не таксономийные) атрибуты - значение хранится прямо в
         // товаре, никаких термов/wp_insert_term. Обязательно для значений,
-        // почти уникальных на партию (напр. "Срок годности") - иначе термы
-        // накапливаются без ограничения (см. инцидент с pa_datevalid).
+        // почти уникальных на партию (напр. "Срок годности", "Штрихкод") -
+        // иначе термы накапливаются без ограничения (см. инцидент с
+        // pa_datevalid/pa_scancod). Значение может быть скаляром (одна дата)
+        // или массивом (несколько штрихкодов на товар) - принимаем оба вида.
         foreach ((array) ($row['custom_attributes'] ?? []) as $name => $value) {
-            $value = trim((string) $value);
-            if ($value === '') {
+            $values = is_array($value) ? $value : [$value];
+            $values = array_values(array_filter(array_map(
+                static function ($v) { return trim((string) $v); },
+                $values
+            ), static function ($v) { return $v !== ''; }));
+            if (empty($values)) {
                 continue;
             }
             $attribute = new WC_Product_Attribute();
             $attribute->set_id(0);
             $attribute->set_name($name);
-            $attribute->set_options([$value]);
+            $attribute->set_options($values);
             $attribute->set_position(0);
             $attribute->set_visible(true);
             $attribute->set_variation(false);
             $attributes[] = $attribute;
         }
         $product->set_attributes($attributes);
+
+        // Мета-ключи остатка по филиалам должны точно отражать текущую
+        // выгрузку: если товар обновляется, а не создаётся заново, чистим
+        // ключи филиалов, которых нет в текущем импорте для этого SKU -
+        // иначе устаревшие филиалы копятся в meta_data бесконечно.
+        if (!$is_new) {
+            $incoming_keys = array_map('strval', array_keys((array) ($row['meta_data'] ?? [])));
+            foreach ($product->get_meta_data() as $meta) {
+                if (!in_array((string) $meta->key, $incoming_keys, true)) {
+                    $product->delete_meta_data($meta->key);
+                }
+            }
+        }
 
         foreach ((array) ($row['meta_data'] ?? []) as $key => $value) {
             $product->update_meta_data($key, $value);
