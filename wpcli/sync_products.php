@@ -71,7 +71,10 @@ function uniko_resolve_term_ids($taxonomy, $names) {
 // индексную таблицу WooCommerce, без выгрузки полных объектов товаров)
 $existing = [];
 $rows = $wpdb->get_results(
-    "SELECT product_id, sku, stock_status FROM {$wpdb->prefix}wc_product_meta_lookup",
+    // JOIN с posts отсекает осиротевшие строки lookup (товар удалён, строка
+    // осталась) - иначе такой SKU считается существующим и не создаётся заново
+    "SELECT l.product_id, l.sku, l.stock_status FROM {$wpdb->prefix}wc_product_meta_lookup l
+     INNER JOIN {$wpdb->posts} p ON p.ID = l.product_id",
     ARRAY_A
 );
 foreach ($rows as $row) {

@@ -83,7 +83,10 @@ def _connect():
         connect_kwargs["key_filename"] = SSH_KEY_PATH
     else:
         connect_kwargs["password"] = SSH_PASSWORD
-    ssh.connect(**connect_kwargs)
+    ssh.connect(**connect_kwargs, timeout=30, banner_timeout=30, auth_timeout=30)
+    # Без keepalive молча умершее соединение (VPN/NAT) не замечается никогда,
+    # и stdout.read() ниже висит вечно - скрипт не завершается.
+    ssh.get_transport().set_keepalive(30)
     return ssh
 
 
@@ -99,7 +102,9 @@ def _upload_and_run(local_path):
             f"{WP_CLI_BIN} eval-file {WP_SYNC_SCRIPT_PATH} {remote_path} "
             f"--path={WP_PATH} --allow-root"
         )
-        _, stdout, stderr = ssh.exec_command(command)
+        # timeout - на каждое чтение: скрипт печатает прогресс каждые 200
+        # товаров, 30 минут тишины = соединение мертво, падаем в ретрай.
+        _, stdout, stderr = ssh.exec_command(command, timeout=1800)
         out = stdout.read().decode("utf-8", errors="replace")
         err = stderr.read().decode("utf-8", errors="replace")
         exit_status = stdout.channel.recv_exit_status()

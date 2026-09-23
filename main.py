@@ -235,7 +235,12 @@ for attribute in existing_attributes:
 #замените вызов ниже на:
 #   existing_products = api.get_all_products()
 #   api.create_and_update_products(existing_products, result['stocks'], existing_attributes, existing_categories)
-sync_result = wpcli_sync.sync_products_via_wpcli(result['stocks'])
+try:
+    sync_result = wpcli_sync.sync_products_via_wpcli(result['stocks'])
+except Exception as e:
+    # Сообщение в тг должно уйти и при падении синка - иначе о сбое не узнать
+    print("Синк товаров упал:", e)
+    sync_result = {'failed': str(e)}
 
 
 
@@ -288,14 +293,22 @@ sync_summary_line = (
     f"снято с остатка {sync_result.get('outofstock', 0)}, "
     f"ошибок {sync_result.get('errors', 0)}"
 )
+if sync_result.get('failed'):
+    message_lines[0] = "ОШИБКА: синк товаров не выполнен."
+    sync_summary_line = sync_result['failed'][:1000]
 message_lines.append(sync_summary_line)
 if sync_result.get('error_skus'):
     message_lines.append("SKU с ошибками: " + ", ".join(sync_result['error_skus']))
 
 message = "\n".join(message_lines)
+print("\n" + "=" * 40 + "\n" + message + "\n" + "=" * 40)
 
 #отправляем сообщение в телеграмм
 # send_telegram_message(message)
 url = "https://n9n.alimuradov.ru/webhook/fc931587-9fed-4f36-86ff-bf53322860ac"
-response = requests.post(url, json={"text": message}, timeout=30)
-print(f"\nОтвет вебхука: {response.status_code} {response.text}")
+try:
+    response = requests.post(url, json={"text": message}, timeout=30)
+    print(f"\nОтвет вебхука: {response.status_code} {response.text}")
+except requests.RequestException as e:
+    print("\nВебхук недоступен:", e)
+print("СКРИПТ ЗАВЕРШЁН")
